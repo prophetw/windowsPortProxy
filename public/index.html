@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>端口转发工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    label { display: block; margin: 10px 0 5px; }
+    input { padding: 5px; width: 200px; }
+    button { padding: 10px 20px; margin: 10px 10px 0 0; }
+    .delete-btn { padding: 5px 10px; background-color: #ff4d4d; color: white; border: none; cursor: pointer; }
+    .delete-btn:hover { background-color: #cc0000; }
+    #result { margin-top: 20px; color: green; }
+    #error { margin-top: 20px; color: red; }
+    table { border-collapse: collapse; margin-top: 20px; width: 100%; max-width: 600px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h2>设置端口转发</h2>
+  <label>监听端口:</label>
+  <input type="number" id="listenPort" value="3003">
+  <label>监听地址:</label>
+  <input type="text" id="listenAddress" value="0.0.0.0">
+  <label>目标端口:</label>
+  <input type="number" id="connectPort" value="3003">
+  <label>目标地址:</label>
+  <input type="text" id="connectAddress" value="172.17.0.2">
+  <button onclick="setProxy()">设置转发</button>
+  <button onclick="showProxyRules()">查看转发规则</button>
+  <div id="result"></div>
+  <div id="error"></div>
+
+  <h3>当前转发规则</h3>
+  <table id="rulesTable">
+    <thead>
+      <tr>
+        <th>监听地址</th>
+        <th>监听端口</th>
+        <th>目标地址</th>
+        <th>目标端口</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="rulesBody"></tbody>
+  </table>
+
+  <script>
+    async function setProxy() {
+      const listenPort = document.getElementById('listenPort').value;
+      const listenAddress = document.getElementById('listenAddress').value;
+      const connectPort = document.getElementById('connectPort').value;
+      const connectAddress = document.getElementById('connectAddress').value;
+
+      const response = await fetch('/set-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listenPort, listenAddress, connectPort, connectAddress })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        document.getElementById('result').textContent = result.message;
+        document.getElementById('error').textContent = '';
+        showProxyRules(); // 设置成功后刷新规则列表
+      } else {
+        document.getElementById('error').textContent = result.message;
+        document.getElementById('result').textContent = '';
+      }
+    }
+
+    async function deleteProxy(listenPort, listenAddress) {
+      const response = await fetch('/delete-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listenPort, listenAddress })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        document.getElementById('result').textContent = result.message;
+        document.getElementById('error').textContent = '';
+        showProxyRules(); // 删除成功后刷新规则列表
+      } else {
+        document.getElementById('error').textContent = result.message;
+        document.getElementById('result').textContent = '';
+      }
+    }
+
+    async function showProxyRules() {
+      const response = await fetch('/get-proxy');
+      const result = await response.json();
+
+      const rulesBody = document.getElementById('rulesBody');
+      rulesBody.innerHTML = ''; // 清空现有内容
+
+      if (result.success && result.rules.length > 0) {
+        result.rules.forEach(rule => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${rule.listenAddress}</td>
+            <td>${rule.listenPort}</td>
+            <td>${rule.connectAddress}</td>
+            <td>${rule.connectPort}</td>
+            <td><button class="delete-btn" onclick="deleteProxy('${rule.listenPort}', '${rule.listenAddress}')">删除</button></td>
+          `;
+          rulesBody.appendChild(row);
+        });
+        document.getElementById('error').textContent = '';
+      } else {
+        rulesBody.innerHTML = '<tr><td colspan="5">暂无转发规则</td></tr>';
+        if (!result.success) {
+          document.getElementById('error').textContent = result.message;
+        }
+      }
+    }
+
+    // 页面加载时自动显示规则
+    window.onload = showProxyRules;
+  </script>
+</body>
+</html>
